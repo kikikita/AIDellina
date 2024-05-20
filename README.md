@@ -2,7 +2,7 @@
 
 ## Установка
 Склонировать репозиторий:
-- git clone [https://gitlab.com/kikikita/AIDeLLina.git](https://github.com/kikikita/AIDellina.git)
+- git clone https://github.com/kikikita/AIDellina.git
 
 Создать виртуальное окружение в папке репозитория:
 - python -m venv venv
