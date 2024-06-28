@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import pypyodbc as odbc
 from darts import TimeSeries
-from darts.models import Prophet,  AutoARIMA, ExponentialSmoothing
+from darts.models import Prophet, ExponentialSmoothing
 from darts.dataprocessing.transformers import Scaler
 from darts.metrics import mape, r2_score
 import random
@@ -280,7 +280,7 @@ def forecast(df: pd.DataFrame, periods: int):
         train_series = scaler.transform(
             TimeSeries.from_dataframe(temp_df.iloc[:-6], 'ds', 'y'))
 
-        models = [ExponentialSmoothing(), AutoARIMA(), Prophet()]
+        models = [ExponentialSmoothing(), Prophet()]
         best_model = None
         best_mape = float('inf')
 
@@ -333,7 +333,7 @@ def forecast(df: pd.DataFrame, periods: int):
     df_mape = pd.DataFrame({'MAPE': mape_dict})
     df_model = pd.DataFrame({'Model name': model_dict})
     metrics = pd.concat([df_r2, df_mape, df_model], axis=1)
-
+    result.to_excel('data/last_forecast.xlsx')
     return result, metrics
 
 
@@ -433,7 +433,9 @@ def make_full_predict(osp: str, date_open, date_start,
     # try:
     print("Построение прогноза...")
     last_date = df['ds'].max()
+    # print('Дата: ', date_until)
     periods = months_difference(last_date, date_until)
+    # print(periods)
     pred, metrics = forecast(df, periods)
     # except Exception:
     #     print('Ошибка в построении прогноза')
