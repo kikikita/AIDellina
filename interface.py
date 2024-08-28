@@ -28,16 +28,18 @@ def run_prediction():
         date_start_entry.get() or "2014-01-01", "%Y-%m-%d")
     date_until = datetime.strptime(
         date_until_entry.get() or "2029-12-01", "%Y-%m-%d")
+    is_mt_cf = mt_cf_var.get()
     is_forecast = forecast_var.get()
 
     def run_in_thread():
-        make_full_predict(osp, date_open, date_start, date_until, is_forecast)
+        make_full_predict(osp, date_open, date_start, date_until,
+                          is_forecast, is_mt_cf)
 
     threading.Thread(target=run_in_thread).start()
 
 
 root = tk.Tk()
-root.geometry("500x500")
+root.geometry("500x550")
 root.title("AIDellina: Переезды")
 
 osp_frame = tk.Frame(root)
@@ -74,16 +76,21 @@ date_until_entry = tk.Entry(date_until_frame)
 date_until_entry.insert(0, "2029-12-01")
 date_until_entry.pack(padx=10)
 
+mt_cf_var = tk.IntVar()
+mt_cf_check = tk.Checkbutton(
+    root, text="Применить кф нагрузки к МТ", variable=mt_cf_var)
+mt_cf_check.pack(pady=10)
+
 forecast_var = tk.IntVar()
 forecast_check = tk.Checkbutton(
-    root, text="Использовать прогноз СПП:", variable=forecast_var)
+    root, text="Использовать прогноз СПП", variable=forecast_var)
 forecast_check.pack(pady=10)
 
 make_forecast_button = tk.Button(
     root, text="Построить прогноз", command=run_prediction, padx=50, pady=20)
 make_forecast_button.pack(pady=20)
 
-console = scrolledtext.ScrolledText(root, width=60, height=20)
+console = scrolledtext.ScrolledText(root, width=60, height=30)
 console.pack(pady=10)
 
 sys.stdout = StdoutRedirector(console)

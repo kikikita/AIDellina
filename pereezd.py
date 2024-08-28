@@ -12,6 +12,9 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import shutil
 import openpyxl as ox
+from openpyxl.chart import LineChart, Reference, Series
+from openpyxl.chart.layout import Layout, ManualLayout
+
 import logging
 warnings.filterwarnings('ignore')
 logging.disable(logging.CRITICAL)
@@ -117,45 +120,6 @@ def get_data(osp: str, date_start, forecast: None = None):
                          'экспресс-доставка': 'exp_ish_nv',
                          'экспресс-доставка входящий груз': 'exp_vh_nv'})
 
-    parts = {}
-    if 'ad_ish_kg' in df_kg.columns and 'ad_vh_kg' in df_kg.columns:
-        parts['ad_ish_kg'] = np.mean(
-            df_kg['ad_ish_kg'].tail(6)/df_kg['mt_1'].tail(6))
-        parts['ad_vh_kg'] = np.mean(
-            df_kg['ad_vh_kg'].tail(6)/df_kg['mt_2'].tail(6))
-        parts['ad_ish_nv'] = np.mean(
-            df_nv['ad_ish_nv'].tail(6)/df_nv['nv_1'].tail(6))
-        parts['ad_vh_nv'] = np.mean(
-            df_nv['ad_vh_nv'].tail(6)/df_nv['nv_2'].tail(6))
-
-    if 'krai_ish_kg' in df_kg.columns:
-        parts['krai_ish_kg'] = np.mean(
-            df_kg['krai_ish_kg'].tail(6)/df_kg['mt_1'].tail(6))
-        parts['krai_ish_nv'] = np.mean(
-            df_nv['krai_ish_nv'].tail(6)/df_nv['nv_1'].tail(6))
-
-    if 'krai_vh_kg' in df_kg.columns:
-        parts['krai_vh_kg'] = np.mean(
-            df_kg['krai_vh_kg'].tail(6)/df_kg['mt_2'].tail(6))
-        parts['krai_vh_nv'] = np.mean(
-            df_nv['krai_vh_nv'].tail(6)/df_nv['nv_2'].tail(6))
-
-    if 'exp_ish_kg' in df_kg.columns:
-        parts['exp_ish_kg'] = np.mean(
-            df_kg['exp_ish_kg'].tail(6)/df_kg['mt_1'].tail(6))
-        parts['exp_ish_nv'] = np.mean(
-            df_nv['exp_ish_nv'].tail(6)/df_nv['nv_1'].tail(6))
-
-    if 'exp_vh_kg' in df_kg.columns:
-        parts['exp_vh_kg'] = np.mean(
-            df_kg['exp_vh_kg'].tail(6)/df_kg['mt_2'].tail(6))
-        parts['exp_vh_nv'] = np.mean(
-            df_nv['exp_vh_nv'].tail(6)/df_nv['nv_2'].tail(6))
-
-    for key in parts.keys():
-        if parts[key] < 0.005:
-            parts[key] = 0
-
     df_ = pd.concat([df_kg[['ds', 'mt_1', 'mt_2']].reset_index(drop=True),
                      df_nv[['nv_1', 'nv_2']].reset_index(drop=True)], axis=1)
 
@@ -163,7 +127,7 @@ def get_data(osp: str, date_start, forecast: None = None):
 
     df_.drop(df_.loc[df['ds'] == 0].index, inplace=True)
 
-    return df_, df_kg, df_nv, parts
+    return df_, df_kg, df_nv
 
 
 def mt_coef_finder(cut_forecast: pd.DataFrame, weight: float):
@@ -246,7 +210,7 @@ def stationary_r2_score(actual: np.ndarray, predicted: np.ndarray) -> float:
         TimeSeries.from_values(predicted_diff[:len(actual_diff)]))
 
 
-def forecast(df: pd.DataFrame, periods: int):
+def forecast(df: pd.DataFrame, periods: int, is_mt_cf: None = None):
     """
     Функция для прогнозирования.
 
@@ -324,7 +288,8 @@ def forecast(df: pd.DataFrame, periods: int):
         st_r2_dict[col_name] = best_st_r2
 
     result = result.tail(periods).set_index('ds')
-    # result = result_mt_changer(cut_df, result)
+    if is_mt_cf == 1 or is_mt_cf == '1':
+        result = result_mt_changer(cut_df, result)
     tn_coefs = tn_coef_finder(cut_df, periods)
     for k, v in tn_coefs.items():
         result[k] = result[v[0]] / v[1]
@@ -413,8 +378,65 @@ def update_spreadsheet(path: str, _data, startcol: int = 1,
     wb.save(path)
 
 
+def graph_create(file_path):
+    wb = ox.load_workbook(file_path)
+    ws = wb['Форма']
+
+    # Define the data series
+    series1, series2, series3, series4 = [], [], [], []
+
+    for row in (21, 22, 23, 24, 25, 26, 64, 65, 66, 67, 68, 69):
+        series = Series(Reference(ws, min_col=3, min_row=row, max_col=38,
+                                  max_row=row), title=ws[f'A{row}'].value)
+        series.graphicalProperties.line.width = 3 * 12700
+
+        if row in (21, 22, 23):
+            series.graphicalProperties.line.solidFill = "1f497d"  # Blue color
+            series.graphicalProperties.line.dashStyle = "sysDash"  # Dashed line
+            series1.append(series)
+
+        if row in (64, 65, 66):
+            series.graphicalProperties.line.solidFill = "1f497d"  # Blue color
+            series.graphicalProperties.line.dashStyle = "solid"  # Solid line
+            series2.append(series)
+
+        if row in (24, 25, 26):
+            series.graphicalProperties.line.solidFill = "9d3d3a"  # Red color
+            series.graphicalProperties.line.dashStyle = "sysDash"  # Dashed line
+            series3.append(series)
+
+        if row in (67, 68, 69):
+            series.graphicalProperties.line.solidFill = "9d3d3a"  # Red color
+            series.graphicalProperties.line.dashStyle = "solid"  # Solid line
+            series4.append(series)
+
+    tittles = ["Тоннаж", "Выручка", "Накладные"]
+    positions = ["C109", "O109", "AA109"]
+    # Set the categories (horizontal axis labels)
+    categories = Reference(ws, min_col=3, min_row=15, max_col=38, max_row=15)
+    # Add the series to the chart
+    for x in range(3):
+        chart = LineChart()
+        chart.series.append(series1[x])
+        chart.series.append(series2[x])
+        chart.series.append(series3[x])
+        chart.series.append(series4[x])
+        chart.set_categories(categories)
+        chart.title = tittles[x]
+        chart.legend.position = "b"
+        chart.legend.layout = Layout(manualLayout=ManualLayout(
+                                     yMode="edge", xMode="edge"))
+        # Position the chart on the sheet
+        ws.add_chart(chart, positions[x])
+        chart.width = 22.0
+        chart.height = 15.5
+
+    # Save the workbook
+    wb.save(file_path)
+
+
 def make_full_predict(osp: str, date_open, date_start,
-                      date_until, is_forecast):
+                      date_until, is_forecast, is_mt_cf):
     """
     Функция для построения полного прогноза и сохранения в excel-файле.
 
@@ -426,29 +448,20 @@ def make_full_predict(osp: str, date_open, date_start,
     """
     try:
         print("Выгрузка данных...")
-        df, df_kg, df_nv, parts = get_data(osp, date_start, is_forecast)
+        df, df_kg, df_nv = get_data(osp, date_start, is_forecast)
     except Exception:
         print('Ошибка в выгрузке данных')
         return
     # try:
     print("Построение прогноза...")
     last_date = df['ds'].max()
-    # print('Дата: ', date_until)
+
     periods = months_difference(last_date, date_until)
     # print(periods)
-    pred, metrics = forecast(df, periods)
+
+    pred, metrics = forecast(df, periods, is_mt_cf)
     # except Exception:
     #     print('Ошибка в построении прогноза')
-
-    for key in parts.keys():
-        if 'ish_kg' in key:
-            pred[key] = pred['mt_1'] * parts[key]
-        if 'vh_kg' in key:
-            pred[key] = pred['mt_2'] * parts[key]
-        if 'ish_nv' in key:
-            pred[key] = pred['nv_1'] * parts[key]
-        if 'vh_nv' in key:
-            pred[key] = pred['nv_2'] * parts[key]
 
     kg = pred[[col for col in pred.columns if 'mt' in col or 'kg' in col]]
     nv = pred[[col for col in pred.columns if 'nv' in col]]
@@ -488,25 +501,31 @@ def make_full_predict(osp: str, date_open, date_start,
                        startrow=start_row, startcol=5)
     update_spreadsheet(file_path, df_nv.iloc[:, :-1], sheet_name='Расчёт (ТН)',
                        startrow=start_row, startcol=5)
+    graph_create(file_path)
 
     print('Прогноз построен и сохранен в папку /data!')
     print(metrics)
 
 
 if __name__ == "__main__":
-    osp = str(input('Введите наименование ОСП: '))
-    # dates = input(
-    #     'Введите даты прогноза через пробел в формате YYYY-MM-DD ' +
-    #     '(вторая дата опциональна): ')\
-    #     .split()
-    date_open = input('Введите дату октрытия ОСП в формате YYYY-MM-DD: ')
-    date_start_ = input(
-        'Введите дату, с которой стоит брать данные, ' +
-        'или нажмите "Enter": ')
-    date_until_ = input(
-        'Введите дату, до которой необходим прогноз, ' +
-        'или нажмите "Enter": ')
-    is_forecast = input('Использовать прогноз СПП? Да - 1, Нет - "Enter": ')
+    osp = 'Москва Север 2'
+    date_open = '2025-01-01'
+    date_start_ = '2014-01-01'
+    date_until_ = '2029-12-01'
+    is_forecast = None
+    is_mt_cf = None
+
+    # osp = str(input('Введите наименование ОСП: '))
+    # date_open = input('Введите дату октрытия ОСП в формате YYYY-MM-DD: ')
+    # date_start_ = input(
+    #     'Введите дату, с которой стоит брать данные, ' +
+    #     'или нажмите "Enter": ')
+    # date_until_ = input(
+    #     'Введите дату, до которой необходим прогноз, ' +
+    #     'или нажмите "Enter": ')
+    # is_forecast = input('Использовать прогноз СПП? Да - 1, Нет - "Enter": ')
+    # is_mt_cf = input('Использовать кф для МТ? Да - 1, Нет - "Enter": ')
+
     # try:
     date_open = datetime.strptime(date_open, "%Y-%m-%d")
 
@@ -518,6 +537,7 @@ if __name__ == "__main__":
     if len(date_until_) == 10 and date_until_.startswith('2'):
         date_until = datetime.strptime(date_until_, "%Y-%m-%d")
 
-    make_full_predict(osp, date_open, date_start, date_until, is_forecast)
+    make_full_predict(osp, date_open, date_start, date_until,
+                      is_forecast, is_mt_cf)
     # except ValueError:
     #     print('Неверный формат даты. Используйте формат YYYY-MM-DD')

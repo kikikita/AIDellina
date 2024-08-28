@@ -81,18 +81,19 @@ def forecast(table_name: str, periods: int):
         future = m.make_future_dataframe(periods=periods, freq='MS')
         forecast = m.predict(future)
         # m.plot(forecast, ylabel=col_name)
-        temp_df = forecast[['ds', 'yhat']]
-        temp_df.columns = ['ds', col_name]
+        temp_df = forecast[['ds', 'yhat', 'yhat_upper', 'yhat_lower']]
+        temp_df.columns = ['ds', col_name, f'{col_name}_up',
+                           f'{col_name}_low']
         temp_df[col_name] = np.abs(temp_df[col_name])
         if i == 1:
             result = temp_df
         else:
             result = result.join(temp_df.iloc[:, 1:4])
     result = result.tail(periods).set_index('ds')
-    # result = result_mt_changer(cut_df, result)
-    # tn_coefs = tn_coef_finder(cut_df, periods)
-    # for k, v in tn_coefs.items():
-    #     result[k] = result[v[0]] / v[1]
+    result = result_mt_changer(cut_df, result)
+    tn_coefs = tn_coef_finder(cut_df, periods)
+    for k, v in tn_coefs.items():
+        result[k] = result[v[0]] / v[1]
     t_result = result.T
     t_result.to_excel(f'data/{table_name}_forecast.xlsx')
     return t_result
